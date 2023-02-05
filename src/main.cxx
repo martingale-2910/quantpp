@@ -65,19 +65,29 @@ enum class Right
     CALL, PUT
 };
 
-
 template<Right right>
-double vanilla_payoff(double s, double k)
+struct Payoff;
+
+template<>
+struct Payoff<Right::CALL>
 {
-    if(right == Right::CALL)
+    static double compute(double s, double k)
     {
         return std::max(s - k, 0.0);
     }
-    else
+};
+
+template<>
+struct Payoff<Right::PUT>
+{
+    static double compute(double s, double k)
     {
         return std::max(k - s, 0.0);
-    }
-}
+    }    
+};
+
+template<Right right>
+auto vanilla_payoff = &(Payoff<right>::compute);
 
 enum class Style
 {
@@ -89,8 +99,6 @@ struct Option
 {
     double strike;
     double ttm;
-    // static const Right right = _right;
-    // static const Style style = _style;
 
     Option(double strike, double ttm): strike(strike), ttm(ttm) {}
     double payoff(double s) const { return vanilla_payoff<right>(s, this->strike); }
@@ -122,8 +130,9 @@ int main(int argc, char** argv)
     auto option = EuropeanCall(k, t);
 
     double s0 = 100;
+    // TODO: Make it work with npaths larger than 10k
     uint npaths = 10000;
-    uint nsteps = 100;
+    uint nsteps = 240;
 
     std::cout << "Using seed " << seed << std::endl;
     double mc_value = compute_mc_price<>(model, option, s0, npaths, nsteps);

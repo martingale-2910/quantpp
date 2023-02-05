@@ -8,11 +8,12 @@ OBJS = $(SRCS:$(SRC_DIR)/%.cxx=$(OBJ_DIR)/%.o)
 TARGET_DIR := $(BUILD_DIR)/target
 TARGET := $(TARGET_DIR)/app
 
-CXX_FLAGS = -std=c++20 -O0 -Wall -Wextra -Wpedantic -g
+.PHONY: all clean release
 
-.PHONY: all clean
-
-all: clean build
+all: debug
+debug: CXX_FLAGS=-std=c++20 -O0 -Wall -Wextra -Wpedantic -g
+release: CXX_FLAGS=-std=c++20 -Ofast
+debug release: clean build
 build: $(TARGET)
 
 $(TARGET): $(OBJS)
