@@ -3,11 +3,11 @@
 #include <valarray>
 #include <tuple>
 #include <random>
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 
 using vecd = std::valarray<double>;
-// using vecd = std::vector<double>;
 
 auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 std::mt19937 rng = std::mt19937(seed);
@@ -21,10 +21,7 @@ double generate_stdnorm()
 vecd generate_stdnormv(uint nsamples)
 {
     vecd res(nsamples);
-    for(uint i = 0; i < nsamples; ++i)
-    {
-        res[i] = generate_stdnorm();
-    }
+    std::generate(std::begin(res), std::end(res), generate_stdnorm);
     return res;
 };
 
@@ -41,6 +38,13 @@ struct BS
     }
 };
 
+// Returning a non reference doesn't seem to work
+vecd& compute_bs_step(BS const & bs, vecd & s, double dt, vecd const & z)
+{
+    s = s * (1 + bs.r * dt + bs.vol * std::sqrt(dt) * z);
+    return s;
+};
+
 vecd simulate_bs_values(BS const & bs, double s0, double dt, uint npaths, uint nsteps)
 {
     vecd st = vecd(s0, npaths);
@@ -48,7 +52,9 @@ vecd simulate_bs_values(BS const & bs, double s0, double dt, uint npaths, uint n
     for(uint i = 0; i < nsteps; ++i)
     {
         vecd z = generate_stdnormv(nsteps);
-        st = st * (1 + bs.r * dt + bs.vol * std::sqrt(dt) * z);
+        // The below fails if the method does not return a reference
+        // and instead needs to do st = st * (1 + bs.r * dt + bs.vol * std::sqrt(dt) * z);
+        st = compute_bs_step(bs, st, dt, z);
         std::cout << "[" << i + 1 << "]" <<  " st := " << st.sum() / st.size() << std::endl;
     }
     return st;
