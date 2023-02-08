@@ -1,64 +1,78 @@
 #include <iostream>
-#include <vector>
 #include <valarray>
-#include <tuple>
 #include <random>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 
-using vecd = std::valarray<double>;
+const bool DEBUG = false;
 
-auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-std::mt19937 rng = std::mt19937(seed);
-std::normal_distribution<double> stdnormd = std::normal_distribution<>(0.0, 1.0);;
+using vecd = std::valarray<double>;
+using ulong = unsigned long;
+
+// RNG
+
+static const ulong seed{static_cast<ulong>(std::chrono::high_resolution_clock::now().time_since_epoch().count())};
+static std::mt19937 rng{seed};
+static std::normal_distribution<double> stdnormd{0.0, 1.0};
 
 double generate_stdnorm()
 {
     return stdnormd(rng);
 };
 
-vecd generate_stdnormv(uint nsamples)
+vecd generate_stdnorm(uint nsamples)
 {
     vecd res(nsamples);
-    std::generate(std::begin(res), std::end(res), generate_stdnorm);
+    std::generate(std::begin(res), std::end(res), []()->double { return generate_stdnorm(); });
     return res;
 };
+
+// MODELS
 
 struct BS
 {
     double r;
     double vol;
 
-    BS(double r, double vol): r(r), vol(vol) {}
+    // TODO: How to work-around the necessity of having a dft constructor?
+    BS() = default;
+    BS(double r, double vol): r(r), vol(vol) {};
 
     double discount_factor(double t) const
     {
         return std::exp(-this->r * t);
-    }
+    };
 };
 
-// Returning a non reference doesn't seem to work
-vecd& compute_bs_step(BS const & bs, vecd & s, double dt, vecd const & z)
+// MODEL SIMULATIONS
+
+vecd compute_bs_step(BS const & bs, vecd & s, double dt, vecd const & z)
 {
-    s = s * (1 + bs.r * dt + bs.vol * std::sqrt(dt) * z);
+    s = std::move(s * (1 + bs.r * dt + bs.vol * std::sqrt(dt) * z));
     return s;
 };
 
 vecd simulate_bs_values(BS const & bs, double s0, double dt, uint npaths, uint nsteps)
 {
     vecd st = vecd(s0, npaths);
-    std::cout << "[0]" <<  " st := " << st.sum() / st.size() << std::endl;
+    if (DEBUG)
+    {
+        std::cout << "[0]" <<  " st := " << st.sum() / st.size() << std::endl;
+    };
     for(uint i = 0; i < nsteps; ++i)
     {
-        vecd z = generate_stdnormv(nsteps);
-        // The below fails if the method does not return a reference
-        // and instead needs to do st = st * (1 + bs.r * dt + bs.vol * std::sqrt(dt) * z);
-        st = compute_bs_step(bs, st, dt, z);
-        std::cout << "[" << i + 1 << "]" <<  " st := " << st.sum() / st.size() << std::endl;
+        vecd z = generate_stdnorm(npaths);
+        st = std::move(st * (1 + bs.r * dt + bs.vol * std::sqrt(dt) * z));
+        if (DEBUG)
+        {
+            std::cout << "[" << i + 1 << "]" <<  " st := " << st.sum() / st.size() << std::endl;
+        };
     }
     return st;
 };
+
+// OPTIONS
 
 enum class Right
 {
@@ -74,7 +88,7 @@ struct Payoff<Right::CALL>
     static double compute(double s, double k)
     {
         return std::max(s - k, 0.0);
-    }
+    };
 };
 
 template<>
@@ -83,11 +97,11 @@ struct Payoff<Right::PUT>
     static double compute(double s, double k)
     {
         return std::max(k - s, 0.0);
-    }    
+    }; 
 };
 
 template<Right right>
-auto vanilla_payoff = &(Payoff<right>::compute);
+constexpr auto vanilla_payoff = &(Payoff<right>::compute);
 
 enum class Style
 {
@@ -100,23 +114,48 @@ struct Option
     double strike;
     double ttm;
 
-    Option(double strike, double ttm): strike(strike), ttm(ttm) {}
-    double payoff(double s) const { return vanilla_payoff<right>(s, this->strike); }
-    vecd payoff(vecd const & s) const { return (s - this->strike).apply([](double xi)->double{ return vanilla_payoff<right>(xi, 0.0); }); }
-    
+    // TODO: How to work-around the necessity of having a dft constructor?
+    Option() = default;
+    Option(double strike, double ttm): strike(strike), ttm(ttm) {};
+    double payoff(double s) const { return vanilla_payoff<right>(s, this->strike); };
+    vecd payoff(vecd const & s) const { return (s - this->strike).apply([](double xi)->double{ return vanilla_payoff<right>(xi, 0.0); }); };
 };
 
 using EuropeanCall = Option<Right::CALL, Style::EUROPEAN>;
 using EuropeanPut = Option<Right::PUT, Style::EUROPEAN>;
 
-template<typename Option>
-double compute_mc_price(BS const & model, Option const & option, double s0, uint npaths, uint nsteps)
+using AmericanCall = Option<Right::CALL, Style::AMERICAN>;
+using AmericanPut = Option<Right::PUT, Style::AMERICAN>;
+
+// MC VALUE COMPUTATIONS
+
+// TODO: How to work-around the necessity of having a constructor?
+template<typename Model, typename Option>
+struct MCValue
 {
-    double dt = option.ttm / nsteps;
-    vecd st = simulate_bs_values(model, s0, dt, npaths, nsteps);
-    vecd v0 = model.discount_factor(option.ttm)*option.payoff(st);
-    return v0.sum() / v0.size();
-}
+    MCValue(Model const & model, Option const & option);
+};
+
+template<typename EuropeanOption>
+struct MCValue<BS, EuropeanOption>
+{
+    BS model;
+    EuropeanOption option;
+
+    MCValue(BS const & model, EuropeanOption const & option)
+    {
+        this->model = model;
+        this->option = option;
+    };
+
+    double compute(double s0, uint npaths, uint nsteps) const
+    {
+        double dt = this->option.ttm / nsteps;
+        vecd st = simulate_bs_values(this->model, s0, dt, npaths, nsteps);
+        vecd v0 = this->model.discount_factor(this->option.ttm)*(this->option).payoff(st);
+        return v0.sum() / v0.size();
+    };
+};
 
 int main(int argc, char** argv)
 {
@@ -126,17 +165,19 @@ int main(int argc, char** argv)
 
     double k = 110;
     double t = 1.0;
-
-    auto option = EuropeanCall(k, t);
+    
+    auto callopt = EuropeanCall(k, t);
+    auto putopt = EuropeanPut(k, t);
 
     double s0 = 100;
-    // TODO: Make it work with npaths larger than 10k
-    uint npaths = 10000;
+    uint npaths = 100000;
     uint nsteps = 240;
 
     std::cout << "Using seed " << seed << std::endl;
-    double mc_value = compute_mc_price<>(model, option, s0, npaths, nsteps);
-    std::cout << "mc_value:=" << mc_value << std::endl;
+    double val1 = MCValue(model, callopt).compute(s0, npaths, nsteps);
+    double val2 = MCValue(model, putopt).compute(s0, npaths, nsteps);
+    std::cout << "[CALL] mc_value := " << val1 << std::endl;
+    std::cout << "[PUT] mc_value := " << val2 << std::endl;
 
     return 0;
-}
+};
