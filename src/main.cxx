@@ -135,10 +135,13 @@ int main(int argc, char** argv)
     uint nsteps = 240;
 
     std::cout << "Using seed " << seed << std::endl;
+    auto time1 = std::chrono::high_resolution_clock::now().time_since_epoch();
     double val1 = compute_mc_price(model, callopt, s0, npaths, nsteps);
+    auto time2 = std::chrono::high_resolution_clock::now().time_since_epoch();
     double val2 = compute_mc_price(model, putopt, s0, npaths, nsteps);
-    std::cout << "[CALL] mc_value := " << val1 << std::endl;
-    std::cout << "[PUT] mc_value := " << val2 << std::endl;
+    auto time3 = std::chrono::high_resolution_clock::now().time_since_epoch();
+    std::cout << "[CALL] mc_value := " << val1 << ", duration := " << std::chrono::duration_cast<std::chrono::milliseconds>(time2 - time1).count() << "ms" << std::endl;
+    std::cout << "[PUT] mc_value := " << val2 << ", duration := " << std::chrono::duration_cast<std::chrono::milliseconds>(time3 - time2).count() << "ms" << std::endl;
 
     return 0;
 };
