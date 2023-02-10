@@ -5,9 +5,8 @@
 #include <chrono>
 #include <cmath>
 
-const bool DEBUG = false;
-
 using vecd = std::valarray<double>;
+using matd = std::valarray<vecd>;
 using ulong = unsigned long;
 
 // RNG
@@ -21,7 +20,7 @@ double generate_stdnorm()
     return stdnormd(rng);
 };
 
-vecd generate_stdnorm(uint nsamples)
+vecd generate_stdnorm(std::size_t nsamples)
 {
     vecd res(nsamples);
     std::generate(std::begin(res), std::end(res), []()->double { return generate_stdnorm(); });
@@ -51,25 +50,31 @@ vecd compute_model_step(BS const & bs, vecd & s, double dt, vecd const & z)
     return s;
 };
 
-vecd simulate_model_values(BS const & bs, vecd const & s0, double dt, uint nsteps)
+vecd simulate_model_values(BS const & bs, vecd const & s0, double dt, std::size_t nsteps)
 {
-    vecd st = s0;
+    vecd sti = s0;
     std::size_t npaths = s0.size();
-    if (DEBUG)
-    {
-        std::cout << "[0]" <<  " st := " << st.sum() / st.size() << std::endl;
-    };
-    for(uint i = 0; i < nsteps; ++i)
+    for(std::size_t i = 0; i < nsteps; ++i)
     {
         vecd z = generate_stdnorm(npaths);
-        st = std::move(compute_model_step(bs, st, dt, z));
-        if (DEBUG)
-        {
-            std::cout << "[" << i + 1 << "]" <<  " st := " << st.sum() / st.size() << std::endl;
-        };
+        sti = std::move(compute_model_step(bs, sti, dt, z));
+    }
+    return sti;
+};
+
+matd simulate_model_paths(BS const & bs, vecd const & s0, double dt, std::size_t nsteps)
+{
+    vecd sti = s0;
+    std::size_t npaths = s0.size();
+    matd st(nsteps);
+    for(std::size_t i = 1; i < nsteps + 1; ++i)
+    {
+        vecd z = generate_stdnorm(npaths);
+        sti = std::move(compute_model_step(bs, sti, dt, z));
+        st[i] = sti;
     }
     return st;
-};
+}
 
 // OPTIONS
 
@@ -78,12 +83,30 @@ enum class Right
     CALL, PUT
 };
 
-template<Right right>
-constexpr auto vanilla_payoff = [](double s, double k)->double { return right == Right::CALL ? std::max(s - k, 0.0) : std::max(k - s, 0.0); };
-
 enum class Style
 {
     EUROPEAN, AMERICAN
+};
+
+template<Right right>
+struct vanilla_payoff
+{
+    static double compute(double s, double k)
+    {
+        return right == Right::CALL ? std::max(s - k, 0.0) : std::max(k - s, 0.0);
+    }
+
+    static vecd compute(vecd const & s, double k)
+    {
+        if(right == Right::CALL)
+        {
+            return (s - k).apply([](double xi)->double { return std::max(xi, 0.0); });
+        }
+        else
+        {
+            return (k - s).apply([](double xi)->double { return std::max(xi, 0.0); });
+        }
+    }
 };
 
 template<Right right, Style style>
@@ -93,8 +116,8 @@ struct Option
     double ttm;
 
     Option(double strike, double ttm): strike(strike), ttm(ttm) {};
-    double payoff(double s) const { return vanilla_payoff<right>(s, this->strike); };
-    vecd payoff(vecd const & s) const { return (s - this->strike).apply([](double xi)->double{ return vanilla_payoff<right>(xi, 0.0); }); };
+    double payoff(double s) const { return vanilla_payoff<right>::compute(s, this->strike); };
+    vecd payoff(vecd const & s) const { return vanilla_payoff<right>::compute(s, this->strike); };
 };
 
 template<Right right>
@@ -110,7 +133,7 @@ using AmericanPut = AmericanOption<Right::PUT>;
 // MC VALUE COMPUTATIONS
 
 template<Right right>
-double compute_mc_price(BS const & model, EuropeanOption<right> const & option, double s0, uint npaths, uint nsteps)
+double compute_mc_price(BS const & model, EuropeanOption<right> const & option, double s0, std::size_t npaths, std::size_t nsteps)
 {
     double dt = option.ttm / nsteps;
     vecd st = std::move(simulate_model_values(model, vecd(s0, npaths), dt, nsteps));
