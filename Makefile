@@ -13,13 +13,17 @@ ifeq ($(CXX), clang++)
 	LDFLAGS = -lstdc++ -ldl -lm
 endif
 
-.PHONY: all clean debug release build
+.PHONY: all clean debug release build run
 
 all: debug
 debug: CXX_FLAGS=-std=c++17 -O0 -Wall -Wextra -Wpedantic -g -Wpointer-arith 
 release: CXX_FLAGS=-std=c++17 -Ofast -finline-functions -ffast-math -funroll-all-loops
 debug release: clean build
 build: $(TARGET)
+
+run: $(TARGET)
+	@echo 'Running $(TARGET)'
+	$(TARGET)
 
 $(TARGET): $(OBJS)
 	@echo 'Linking $@ from $<'
