@@ -1,9 +1,36 @@
-#include <iostream>
-#include <valarray>
-#include <random>
-#include <algorithm>
-#include <chrono>
-#include <cmath>
+#include <iostream> // std::cout, std::endl
+#include <valarray> // std::valarray
+#include <random> // std::mt19937, std::normal_distribution
+#include <algorithm> // std::generate, std::find
+#include <chrono> // std::chrono::high_resolution_clock
+#include <cmath> // std::exp, std::sqrt
+#include <string_view> // std::string_view
+#include <string> // std::string
+#include <sstream> // std::ostringstream
+
+// FORMAT
+
+template<typename T>
+void format_helper(std::ostringstream & oss, std::string_view & str_view, T const & value)
+{
+    std::size_t open_bracket_pos = str_view.find('{');
+    if (open_bracket_pos == std::string::npos) { return; }
+    std::size_t close_bracket_pos = str_view.find('}', open_bracket_pos + 1);
+    if (close_bracket_pos == std::string::npos) { return; }
+    oss << str_view.substr(0, open_bracket_pos) << value;
+    str_view = str_view.substr(close_bracket_pos + 1);
+}
+
+template<typename... Ts>
+std::string format(std::string_view str_view, Ts... values)
+{
+    std::ostringstream oss;
+    (format_helper(oss, str_view, values),...);
+    oss << str;
+    return oss.str();
+}
+
+// NUMERIC
 
 using vecd = std::valarray<double>;
 using matd = std::valarray<vecd>;
@@ -54,7 +81,7 @@ vecd simulate_model_values(BS const & bs, vecd const & s0, double dt, std::size_
 {
     vecd sti = s0;
     std::size_t npaths = s0.size();
-    for(std::size_t i = 0; i < nsteps; ++i)
+    for (std::size_t i = 0; i < nsteps; ++i)
     {
         vecd z = generate_stdnorm(npaths);
         sti = std::move(compute_model_step(bs, sti, dt, z));
@@ -67,7 +94,7 @@ matd simulate_model_paths(BS const & bs, vecd const & s0, double dt, std::size_t
     vecd sti = s0;
     std::size_t npaths = s0.size();
     matd st(nsteps);
-    for(std::size_t i = 1; i < nsteps + 1; ++i)
+    for (std::size_t i = 1; i < nsteps + 1; ++i)
     {
         vecd z = generate_stdnorm(npaths);
         sti = std::move(compute_model_step(bs, sti, dt, z));
@@ -98,7 +125,7 @@ struct vanilla_payoff
 
     static vecd compute(vecd const & s, double k)
     {
-        if(right == Right::CALL)
+        if (right == Right::CALL)
         {
             return (s - k).apply([](double xi)->double { return std::max(xi, 0.0); });
         }
@@ -161,10 +188,14 @@ int main(int argc, char** argv)
     auto time1 = std::chrono::high_resolution_clock::now().time_since_epoch();
     double val1 = compute_mc_price(model, callopt, s0, npaths, nsteps);
     auto time2 = std::chrono::high_resolution_clock::now().time_since_epoch();
+    ulong duration1 = std::chrono::duration_cast<std::chrono::milliseconds>(time2 - time1).count();
     double val2 = compute_mc_price(model, putopt, s0, npaths, nsteps);
     auto time3 = std::chrono::high_resolution_clock::now().time_since_epoch();
-    std::cout << "[CALL] mc_value := " << val1 << ", duration := " << std::chrono::duration_cast<std::chrono::milliseconds>(time2 - time1).count() << "ms" << std::endl;
-    std::cout << "[PUT] mc_value := " << val2 << ", duration := " << std::chrono::duration_cast<std::chrono::milliseconds>(time3 - time2).count() << "ms" << std::endl;
+    ulong duration2 = std::chrono::duration_cast<std::chrono::milliseconds>(time3 - time2).count();
+
+    std::cout << format("[CALL] MC price = {}, pricing duration = {}ms\n", val1, duration1);
+    std::cout << format("[PUT] MC price = {}, pricing duration = {}ms\n", val2, duration2);
+    std::cout << duration2;
 
     return 0;
 };
