@@ -8,25 +8,54 @@
 #include <string> // std::string
 #include <sstream> // std::ostringstream
 
-// FORMAT
+// ARG PARSE
 
-template<typename T>
-void format_helper(std::ostringstream & oss, std::string_view & str_view, T const & value)
-{
-    std::size_t open_bracket_pos = str_view.find('{');
-    if (open_bracket_pos == std::string::npos) { return; }
-    std::size_t close_bracket_pos = str_view.find('}', open_bracket_pos + 1);
-    if (close_bracket_pos == std::string::npos) { return; }
-    oss << str_view.substr(0, open_bracket_pos) << value;
-    str_view = str_view.substr(close_bracket_pos + 1);
-}
+// std::unordered_map<std::string, std::string> get_cmd_options(int argc, char ** argv, std::vector<std::string> options)
+// {
+
+//     char ** itr = std::find(begin, end, option);
+//     if (itr != end && ++itr != end)
+//     {
+//         return (T)(*itr);
+//     }
+//     return dftval;
+// }
+
+// bool cmd_option_exists(char** begin, char** end, const std::string& option)
+// {
+//     return std::find(begin, end, option) != end;
+// }
+
+
+// FORMAT
 
 template<typename... Ts>
 std::string format(std::string_view str_view, Ts... values)
 {
     std::ostringstream oss;
-    (format_helper(oss, str_view, values),...);
-    oss << str;
+    auto format_single = [&oss, &str_view] (auto value)
+        {
+            std::size_t open_bracket_pos = str_view.find('{');
+            if (open_bracket_pos == std::string::npos)
+            {
+                return;
+            }
+            else
+            {
+                std::size_t close_bracket_pos = str_view.find('}', open_bracket_pos + 1);
+                if (close_bracket_pos == std::string::npos) 
+                { 
+                    return;
+                }
+                else
+                {
+                    oss << str_view.substr(0, open_bracket_pos) << value;
+                    str_view = str_view.substr(close_bracket_pos + 1);
+                }
+            }
+        };
+    (format_single(values),...);
+    oss << str_view;
     return oss.str();
 }
 
