@@ -22,8 +22,8 @@ debug release: clean build
 build: $(TARGET)
 
 run: $(TARGET)
-	@echo 'Running $(TARGET)'
-	$(TARGET)
+	@echo 'Running $(TARGET) with args rate=$(RATE), vol=$(VOL), spot=$(SPOT), strike=$(STRIKE), ttm=$(TTM), npaths=$(NPATHS), nsteps=$(NSTEPS)'
+	$(TARGET) --rate $(RATE) --vol $(VOL) --spot $(SPOT) --strike $(STRIKE) --ttm $(TTM) --npaths $(NPATHS) --nsteps $(NSTEPS)
 
 $(TARGET): $(OBJS)
 	@echo 'Linking $@ from $<'

@@ -13,7 +13,7 @@
 // CMD OPT PARSE
 
 // TODO: Add --seed cmd line opt + add handling of --right cmd line opt
-static const std::vector<std::string> options{"--rate", "--vol", "--strike", "--ttm", "--right", "--s0", "--npaths", "--nsteps"};
+static const std::vector<std::string> options{"--rate", "--vol", "--spot", "--strike", "--ttm", "--right", "--npaths", "--nsteps"};
 
 std::unordered_map<std::string, std::string> parse_cmd_options(std::vector<std::string> const & args, std::vector<std::string> const & options)
 {
@@ -25,7 +25,7 @@ std::unordered_map<std::string, std::string> parse_cmd_options(std::vector<std::
         {   
             auto val_it = next(it);
             bool val_is_not_opt = std::find(options.begin(), options.end(), (*val_it)) == options.end();
-            if (val_is_not_opt && val_it != args.end())
+            if (val_is_not_opt && val_it != args.end() && !(*val_it).empty())
             {
                 cmd_opt_map.emplace(*it, *(val_it));
                 it = val_it;
@@ -245,7 +245,7 @@ int main(int argc, char** argv)
     auto callopt = EuropeanCall(k, t);
     auto putopt = EuropeanPut(k, t);
 
-    double s0 = cmd_option_map.count("--s0") > 0 ? std::stod(cmd_option_map["--s0"]) : 100;
+    double s0 = cmd_option_map.count("--spot") > 0 ? std::stod(cmd_option_map["--spot"]) : 100;
     uint npaths = cmd_option_map.count("--npaths") > 0 ? std::stoul(cmd_option_map["--npaths"]) : 10000;
     uint nsteps = cmd_option_map.count("--nsteps") > 0 ? std::stoul(cmd_option_map["--nsteps"]) : 360;
 
