@@ -20,7 +20,7 @@ vecd simulate_model_values(BS const & bs, vecd const & s0, double dt, std::size_
     for (std::size_t i = 0; i < nsteps; ++i)
     {
         vecd z = generate_stdnorm(npaths);
-        sti = std::move(compute_model_step(bs, sti, dt, z));
+        sti = compute_model_step(bs, sti, dt, z);
     }
     return sti;
 };
@@ -33,7 +33,7 @@ matd simulate_model_paths(BS const & bs, vecd const & s0, double dt, std::size_t
     for (std::size_t i = 1; i < nsteps + 1; ++i)
     {
         vecd z = generate_stdnorm(npaths);
-        sti = std::move(compute_model_step(bs, sti, dt, z));
+        sti = compute_model_step(bs, sti, dt, z);
         st[i] = sti;
     }
     return st;
