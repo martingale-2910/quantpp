@@ -5,27 +5,50 @@
 #include <chrono> // std::chrono::high_resolution_clock
 #include <cmath> // std::exp, std::sqrt
 #include <string_view> // std::string_view
-#include <string> // std::string
+#include <string> // std::string, std::stod, std::stoul
 #include <sstream> // std::ostringstream
+#include <vector> // std::vector
+#include <unordered_map> // std::unordered_map
 
-// ARG PARSE
+// CMD OPT PARSE
 
-// std::unordered_map<std::string, std::string> get_cmd_options(int argc, char ** argv, std::vector<std::string> options)
-// {
+// TODO: Add --seed cmd line opt + add handling of --right cmd line opt
+static const std::vector<std::string> options{"--rate", "--vol", "--strike", "--ttm", "--right", "--s0", "--npaths", "--nsteps"};
 
-//     char ** itr = std::find(begin, end, option);
-//     if (itr != end && ++itr != end)
-//     {
-//         return (T)(*itr);
-//     }
-//     return dftval;
-// }
+std::unordered_map<std::string, std::string> parse_cmd_options(std::vector<std::string> const & args, std::vector<std::string> const & options)
+{
+    auto cmd_opt_map = std::unordered_map<std::string, std::string>();
+    for(auto it = args.begin(); it != args.end(); ++it)
+    {
+        bool opt_is_present = std::find(options.begin(), options.end(), (*it)) != options.end();
+        if (opt_is_present)
+        {   
+            auto val_it = next(it);
+            bool val_is_not_opt = std::find(options.begin(), options.end(), (*val_it)) == options.end();
+            if (val_is_not_opt && val_it != args.end())
+            {
+                cmd_opt_map.emplace(*it, *(val_it));
+                it = val_it;
+            }
+        };
+    }
+    return cmd_opt_map;
+}
 
-// bool cmd_option_exists(char** begin, char** end, const std::string& option)
-// {
-//     return std::find(begin, end, option) != end;
-// }
+std::string parse_cmd_option(std::vector<std::string> const & args, std::string const & option)
+{
+    auto option_it = std::find(args.begin(), args.end(), option);
+    if (option_it != args.end() && (++option_it) != args.end()) // we check that the iterator or the next one isnt the end
+    {
+        return (*option_it);
+    }
+    return "";
+};
 
+bool cmd_option_exists(std::vector<std::string> const & args, std::string const & option)
+{
+    return (std::find(args.begin(), args.end(), option) != args.end());
+};
 
 // FORMAT
 
@@ -67,7 +90,7 @@ using ulong = unsigned long;
 
 // RNG
 
-static const ulong seed{static_cast<ulong>(std::chrono::high_resolution_clock::now().time_since_epoch().count())};
+static ulong seed{static_cast<ulong>(std::chrono::high_resolution_clock::now().time_since_epoch().count())};
 static std::mt19937 rng{seed};
 static std::normal_distribution<double> stdnormd{0.0, 1.0};
 
@@ -199,20 +222,34 @@ double compute_mc_price(BS const & model, EuropeanOption<right> const & option, 
 
 int main(int argc, char** argv)
 {
-    double r = 0.05;
-    double vol = 0.2;
+    // PARSE CMD LINE ARGS
+    std::vector<std::string> args(argv + 1, argv + argc); // We're not interested in the value of argc
+    std::unordered_map<std::string, std::string> cmd_option_map = parse_cmd_options(args, options);
+    if (cmd_option_map.size())
+    {
+        std::cout << "Using following cmd line args:\n";
+    }
+    for (auto const& [k, v] : cmd_option_map)
+    {
+        std::cout << format("\t{} => {}\n", k, v);
+    };
+
+    // INITIALIZE MODEL, OPTION, MC SETTINGS
+    double r = cmd_option_map.count("--rate") > 0 ? std::stod(cmd_option_map["--rate"]) : 0.05;
+    double vol = cmd_option_map.count("--vol") > 0 ? std::stod(cmd_option_map["--vol"]) : 0.2;
     auto model = BS(r, vol);
 
-    double k = 110;
-    double t = 1.0;
-    
+    double k = cmd_option_map.count("--strike") > 0 ? std::stod(cmd_option_map["--strike"]) : 110;
+    double t = cmd_option_map.count("--ttm") > 0 ? std::stod(cmd_option_map["--ttm"]) : 1.0;
+
     auto callopt = EuropeanCall(k, t);
     auto putopt = EuropeanPut(k, t);
 
-    double s0 = 100;
-    uint npaths = 100000;
-    uint nsteps = 240;
+    double s0 = cmd_option_map.count("--s0") > 0 ? std::stod(cmd_option_map["--s0"]) : 100;
+    uint npaths = cmd_option_map.count("--npaths") > 0 ? std::stoul(cmd_option_map["--npaths"]) : 10000;
+    uint nsteps = cmd_option_map.count("--nsteps") > 0 ? std::stoul(cmd_option_map["--nsteps"]) : 360;
 
+    // COMPUTE CALL & PUT MC VALUES
     std::cout << "Using seed " << seed << std::endl;
     auto time1 = std::chrono::high_resolution_clock::now().time_since_epoch();
     double val1 = compute_mc_price(model, callopt, s0, npaths, nsteps);
@@ -222,6 +259,7 @@ int main(int argc, char** argv)
     auto time3 = std::chrono::high_resolution_clock::now().time_since_epoch();
     ulong duration2 = std::chrono::duration_cast<std::chrono::milliseconds>(time3 - time2).count();
 
+    // PRINT RESULTS
     std::cout << format("[CALL] MC price = {}, pricing duration = {}ms\n", val1, duration1);
     std::cout << format("[PUT] MC price = {}, pricing duration = {}ms\n", val2, duration2);
     std::cout << duration2;
