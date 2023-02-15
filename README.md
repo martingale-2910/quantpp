@@ -3,8 +3,29 @@
 A just-for-fun project in C++ on option pricing.
 
 ## Features
-- **Monte Carlo** option valuation:
-    - **European** vanilla option valuation: **Calls, Puts**.
+
+We will be interested in combinations of the following models, options and valuation methods:
+| Model      | Option      | Technique                |
+| ---------- | ----------- | ------------------------ |
+| BS         | European    | Monte Carlo method       |
+| Heston     | American    | Finite difference method |
+
+A list of currently implemented features is presented below:
+- [ ] **Black-Scholes** model:
+  - [ ] **European** vanilla:
+    - [ ] analytical option pricing.
+    - [x] **MC** option pricing.
+    - [ ] **PDE** option pricing.
+  - [ ] **American** vanilla:
+    - [ ] **MC** option pricing.
+    - [ ] **PDE** option pricing.
+- [ ] **Heston** model:
+  - [ ] **European** vanilla:
+    - [ ] **MC** option pricing.
+    - [ ] **PDE** option pricing.
+  - [ ] **American** vanilla:
+    - [ ] **MC** option pricing.
+    - [ ] **PDE** option pricing.
 
 ## Requirements 
 - C++17
